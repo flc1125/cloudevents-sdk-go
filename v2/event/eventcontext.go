@@ -44,7 +44,7 @@ type EventContextReader interface {
 	//
 	// With this:
 	//
-	//     i, err := types.ToInteger(ec.GetExtensions["foo"])
+	//     i, err := types.ToInteger(ec.GetExtensions()["foo"])
 	//
 	ExtensionAs(string, interface{}) error
 
@@ -53,7 +53,7 @@ type EventContextReader interface {
 	// Extensions use the CloudEvents type system, details in package cloudevents/types.
 	GetExtensions() map[string]interface{}
 
-	// GetExtension returns the extension associated with with the given key.
+	// GetExtension returns the extension associated with the given key.
 	// The given key is case insensitive. If the extension can not be found,
 	// an error will be returned.
 	GetExtension(string) (interface{}, error)
@@ -102,7 +102,7 @@ type EventContextConverter interface {
 	AsV1() *EventContextV1
 }
 
-// EventContext is conical interface for a CloudEvents Context.
+// EventContext is canonical interface for a CloudEvents Context.
 type EventContext interface {
 	// EventContextConverter allows for conversion between versions.
 	EventContextConverter
