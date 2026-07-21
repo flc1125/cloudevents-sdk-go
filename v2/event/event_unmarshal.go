@@ -353,6 +353,13 @@ func consumeDataAsBytes(e *Event, isBase64 bool, b []byte) error {
 	if isBase64 {
 		e.DataBase64 = true
 
+		// The raw token must be a quoted JSON string, e.g. "AAAA", before we
+		// can safely strip the surrounding quotes. Anything shorter than two
+		// bytes or not wrapped in quotes is not a valid base64 string token.
+		if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+			return ValidationError{"data_base64": errors.New("expected string")}
+		}
+
 		// Allocate payload byte buffer
 		base64Encoded := b[1 : len(b)-1] // remove quotes
 		e.DataEncoded = make([]byte, base64.StdEncoding.DecodedLen(len(base64Encoded)))
