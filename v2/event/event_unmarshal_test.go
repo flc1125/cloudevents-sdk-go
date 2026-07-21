@@ -1134,6 +1134,18 @@ func TestUnmarshalWithOrderingError(t *testing.T) {
 			Add("type", "com.example.test").
 			Add("source", "http://example.com/source").
 			End(),
+		// Regression test for a nil-pointer dereference panic when
+		// datacontentencoding is the empty string and is cached before
+		// specversion is seen. toStrPtr("") returns (nil, nil), and the
+		// cached-field branch in ReadJson used to dereference that nil
+		// pointer directly.
+		"empty datacontentencoding with datacontentencoding -> specversion": new(orderedJsonObjectBuilder).Start().
+			Add("datacontentencoding", "").
+			Add("specversion", "0.3").
+			Add("id", "ABC-123").
+			Add("type", "com.example.test").
+			Add("source", "http://example.com/source").
+			End(),
 		// Same regression, but with specversion first and no datacontenttype,
 		// so the raw token is captured via iterator.SkipAndReturnBytes()
 		// and still routed through consumeDataAsBytes.

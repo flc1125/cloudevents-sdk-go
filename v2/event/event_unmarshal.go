@@ -166,11 +166,11 @@ func readJsonFromIterator(out *Event, iterator *jsoniter.Iterator) error {
 				}
 				if datacontentencoding != nil {
 					con.DataContentEncoding, err = toStrPtr(datacontentencoding)
-					if *con.DataContentEncoding != Base64 {
-						err = ValidationError{"datacontentencoding": errors.New("invalid datacontentencoding value, the only allowed value is 'base64'")}
-					}
 					if err != nil {
 						return err
+					}
+					if con.DataContentEncoding == nil || *con.DataContentEncoding != Base64 {
+						return ValidationError{"datacontentencoding": errors.New("invalid datacontentencoding value, the only allowed value is 'base64'")}
 					}
 					appendFlag(&state, dataBase64Flag)
 				}
