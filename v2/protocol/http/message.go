@@ -117,7 +117,7 @@ func (m *Message) ReadBinary(ctx context.Context, encoder binding.BinaryWriter) 
 		attr := m.version.Attribute(k)
 		if attr != nil {
 			err = encoder.SetAttribute(attr, v[0])
-		} else if strings.HasPrefix(k, prefix) {
+		} else if strings.HasPrefix(k, prefix) && len(k) > len(prefix) {
 			// Trim Prefix + To lower
 			var b strings.Builder
 			b.Grow(len(k) - len(prefix))
