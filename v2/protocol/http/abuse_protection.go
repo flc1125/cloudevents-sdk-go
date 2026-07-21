@@ -7,9 +7,12 @@ package http
 
 import (
 	"context"
+	"fmt"
 	cecontext "github.com/cloudevents/sdk-go/v2/context"
 	"go.uber.org/zap"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -42,12 +45,12 @@ func (p *Protocol) OptionsHandler(rw http.ResponseWriter, req *http.Request) {
 
 	// The spec does not say we need to validate the origin, just the request origin.
 	// After the handshake, we will validate the origin.
-	if origin, ok := p.ValidateRequestOrigin(req); !ok {
+	origin, ok := p.ValidateRequestOrigin(req)
+	if !ok {
 		rw.WriteHeader(http.StatusBadRequest)
 		return
-	} else {
-		headers.Set("WebHook-Allowed-Origin", origin)
 	}
+	headers.Set("WebHook-Allowed-Origin", origin)
 
 	allowedRateRequired := false
 	if _, ok := req.Header[http.CanonicalHeaderKey("WebHook-Request-Rate")]; ok {
@@ -70,8 +73,15 @@ func (p *Protocol) OptionsHandler(rw http.ResponseWriter, req *http.Request) {
 	cb := req.Header.Get("WebHook-Request-Callback")
 	if cb != "" {
 		if p.WebhookConfig.AutoACKCallback {
+			cbURL, err := validateCallbackURL(cb, origin)
+			if err != nil {
+				cecontext.LoggerFrom(req.Context()).Errorw("OPTIONS handler rejected web hook request callback.", zap.Error(err), zap.String("callback", cb))
+				rw.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
 			go func() {
-				reqAck, err := http.NewRequest(http.MethodPost, cb, nil)
+				reqAck, err := http.NewRequest(http.MethodPost, cbURL.String(), nil)
 				if err != nil {
 					cecontext.LoggerFrom(req.Context()).Errorw("OPTIONS handler failed to create http request attempting to ack callback.", zap.Error(err), zap.String("callback", cb))
 					return
@@ -128,4 +138,71 @@ func (p *Protocol) validateOrigin(ro string) (string, bool) {
 	}
 
 	return ro, false
+}
+
+// validateCallbackURL validates a client-supplied WebHook-Request-Callback
+// URL before the server is allowed to issue an outbound request to it. This
+// guards against SSRF: without these checks an attacker could point the
+// callback at internal services (loopback, RFC1918, link-local, cloud
+// metadata endpoints, etc.) simply by spoofing the WebHook-Request-Origin
+// header used for the (attacker-controlled) origin check.
+//
+// validatedOrigin is the allow-list entry that the request's origin matched
+// (as returned by ValidateRequestOrigin). Unless that entry is the wildcard
+// "*", the callback's host must equal, or be a subdomain of, the validated
+// origin, which ties the callback destination to an operator-configured
+// allow-list rather than to attacker-controlled input alone. Independently
+// of that check, the callback is always rejected if its host is (or
+// resolves to) a loopback, private, link-local, unspecified, or multicast
+// address, since those are never legitimate public webhook destinations.
+func validateCallbackURL(cb string, validatedOrigin string) (*url.URL, error) {
+	u, err := url.Parse(cb)
+	if err != nil {
+		return nil, fmt.Errorf("invalid callback URL: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("callback URL scheme %q is not allowed, only http and https are supported", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("callback URL is missing a host")
+	}
+
+	if !hostMatchesOrigin(host, validatedOrigin) {
+		return nil, fmt.Errorf("callback host %q does not match the validated origin %q", host, validatedOrigin)
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve callback host %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if isDisallowedCallbackIP(ip) {
+			return nil, fmt.Errorf("callback host %q resolves to disallowed address %s", host, ip)
+		}
+	}
+
+	return u, nil
+}
+
+// hostMatchesOrigin reports whether host is allowed as a webhook callback
+// destination given the origin allow-list entry that the request's origin
+// matched. The wildcard "*" allows any host; otherwise host must be exactly
+// validatedOrigin or a subdomain of it.
+func hostMatchesOrigin(host, validatedOrigin string) bool {
+	return validatedOrigin == "*" || host == validatedOrigin || strings.HasSuffix(host, "."+validatedOrigin)
+}
+
+// isDisallowedCallbackIP reports whether ip is a loopback, private,
+// link-local, unspecified, or multicast address that should never be a
+// valid webhook callback destination.
+func isDisallowedCallbackIP(ip net.IP) bool {
+	return ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() ||
+		ip.IsMulticast()
 }
