@@ -1123,12 +1123,36 @@ func TestUnmarshalWithOrderingError(t *testing.T) {
 			Add("data", base64.StdEncoding.EncodeToString([]byte(`{"hello":"world"}`))).
 			Add("datacontentencoding", "base54").
 			End(),
+		// Regression test for a panic (slice bounds out of range [1:0]) when
+		// data_base64 is a non-string JSON token, e.g. the number 0, instead
+		// of a quoted base64 string. Ordered before specversion so the raw
+		// token is cached and processed by consumeDataAsBytes.
+		"non-string data_base64 with data_base64 -> specversion": new(orderedJsonObjectBuilder).Start().
+			Add("data_base64", 0).
+			Add("specversion", "1.0").
+			Add("id", "ABC-123").
+			Add("type", "com.example.test").
+			Add("source", "http://example.com/source").
+			End(),
+		// Same regression, but with specversion first and no datacontenttype,
+		// so the raw token is captured via iterator.SkipAndReturnBytes()
+		// and still routed through consumeDataAsBytes.
+		"non-string data_base64 with specversion -> data_base64": new(orderedJsonObjectBuilder).Start().
+			Add("specversion", "1.0").
+			Add("id", "ABC-123").
+			Add("type", "com.example.test").
+			Add("source", "http://example.com/source").
+			Add("data_base64", 0).
+			End(),
 	}
 	for n, tc := range testCases {
 		t.Run(n, func(t *testing.T) {
 
 			got := &event.Event{}
-			err := json.Unmarshal([]byte(tc), got)
+			var err error
+			require.NotPanics(t, func() {
+				err = json.Unmarshal([]byte(tc), got)
+			})
 
 			require.Error(t, err)
 		})
