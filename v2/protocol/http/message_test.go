@@ -158,7 +158,6 @@ func TestMessageTransformDeleteExtension(t *testing.T) {
 // TestReadBinaryEmptyCeHeaderNoPanic verifies that a header whose name is
 // exactly the "Ce-" prefix (i.e. no attribute/extension name follows it)
 // does not cause ReadBinary to panic with an index-out-of-range error.
-// See advisory-01-binary-header-panic-dos.md.
 func TestReadBinaryEmptyCeHeaderNoPanic(t *testing.T) {
 	h := http.Header{}
 	h.Set("Ce-Specversion", "1.0")
