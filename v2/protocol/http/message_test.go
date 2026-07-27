@@ -174,6 +174,27 @@ func TestReadBinaryEmptyCeHeaderNoPanic(t *testing.T) {
 	})
 }
 
+// TestReadBinaryCeDashDashHeaderNoPanic verifies that a header named "Ce--"
+// (prefix "Ce-" followed by a single "-", yielding an invalid empty/dash
+// extension name) does not cause ReadBinary to panic, and instead results
+// in a validation error from the invalid extension name.
+func TestReadBinaryCeDashDashHeaderNoPanic(t *testing.T) {
+	h := http.Header{}
+	h.Set("Ce-Specversion", "1.0")
+	h.Set("Ce-Id", "1")
+	h.Set("Ce-Source", "/")
+	h.Set("Ce-Type", "t")
+	h["Ce--"] = []string{"x"} // header name == prefix + "-", invalid extension name
+
+	m := NewMessage(h, nil)
+
+	require.NotPanics(t, func() {
+		_, err := binding.ToEvent(context.Background(), m)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "bad key")
+	})
+}
+
 func TestNewMessageFromHttpResponse(t *testing.T) {
 	tests := []struct {
 		name     string
