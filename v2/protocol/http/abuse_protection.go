@@ -117,9 +117,12 @@ func (p *Protocol) validateOrigin(ro string) (string, bool) {
 		if ao == "*" {
 			return ao, true
 		}
-		// TODO: it is not clear what the rules for allowed hosts are.
-		// Need to find docs for this. For now, test for prefix.
-		if strings.HasPrefix(ro, ao) {
+		// Require an exact match, or a match anchored at a DNS-label
+		// boundary (e.g. "sub.trusted.example.com" is allowed by
+		// "trusted.example.com", but "trusted.example.com.attacker.tld"
+		// is not). A plain strings.HasPrefix check would let any origin
+		// that merely starts with an allowed value bypass the allow-list.
+		if ro == ao || strings.HasSuffix(ro, "."+ao) {
 			return ao, true
 		}
 	}
