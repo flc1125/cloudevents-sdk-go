@@ -155,6 +155,46 @@ func TestMessageTransformDeleteExtension(t *testing.T) {
 	require.Equal(t, eventIn.ID(), id)
 }
 
+// TestReadBinaryEmptyCeHeaderNoPanic verifies that a header whose name is
+// exactly the "Ce-" prefix (i.e. no attribute/extension name follows it)
+// does not cause ReadBinary to panic with an index-out-of-range error.
+func TestReadBinaryEmptyCeHeaderNoPanic(t *testing.T) {
+	h := http.Header{}
+	h.Set("Ce-Specversion", "1.0")
+	h.Set("Ce-Id", "1")
+	h.Set("Ce-Source", "/")
+	h.Set("Ce-Type", "t")
+	h["Ce-"] = []string{"x"} // header name == prefix, no attribute/extension name
+
+	m := NewMessage(h, nil)
+
+	require.NotPanics(t, func() {
+		_, err := binding.ToEvent(context.Background(), m)
+		require.NoError(t, err)
+	})
+}
+
+// TestReadBinaryCeDashDashHeaderNoPanic verifies that a header named "Ce--"
+// (prefix "Ce-" followed by a single "-", yielding an invalid empty/dash
+// extension name) does not cause ReadBinary to panic, and instead results
+// in a validation error from the invalid extension name.
+func TestReadBinaryCeDashDashHeaderNoPanic(t *testing.T) {
+	h := http.Header{}
+	h.Set("Ce-Specversion", "1.0")
+	h.Set("Ce-Id", "1")
+	h.Set("Ce-Source", "/")
+	h.Set("Ce-Type", "t")
+	h["Ce--"] = []string{"x"} // header name == prefix + "-", invalid extension name
+
+	m := NewMessage(h, nil)
+
+	require.NotPanics(t, func() {
+		_, err := binding.ToEvent(context.Background(), m)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "bad key")
+	})
+}
+
 func TestNewMessageFromHttpResponse(t *testing.T) {
 	tests := []struct {
 		name     string
