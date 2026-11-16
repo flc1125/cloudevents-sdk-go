@@ -1,6 +1,6 @@
 module github.com/cloudevents/sdk-go/samples/kafka_confluent
 
-go 1.26.0
+go 1.26.10
 
 replace github.com/cloudevents/sdk-go/v2 => ../../v2
 
@@ -9,7 +9,7 @@ replace github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 => ./../../pro
 require (
 	github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.16.0
 	github.com/cloudevents/sdk-go/v2 v2.16.2
-	github.com/confluentinc/confluent-kafka-go/v2 v2.15.1
+	github.com/confluentinc/confluent-kafka-go/v2 v2.16.1
 )
 
 require (
